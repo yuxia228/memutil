@@ -105,8 +105,6 @@ static void cmd_write(unsigned long addr, unsigned long value, int length)
 	// int loop;
 	int write_size = 0;
 	unsigned int old_value = 0, current_value = 0;
-	char *l_reg;
-	unsigned int var;
 	char *reg;
 
 	unsigned long addr_offset = 0; // for address alignment
@@ -119,7 +117,7 @@ static void cmd_write(unsigned long addr, unsigned long value, int length)
 	// request_mem_region(addr, length + 1, DEV_NAME);
 	reg = (char *)ioremap_nocache(addr - addr_offset, length + 4);
 	// if length not equal 1, 2, 4.
-	if (0 == length || 1 < ((length & 0x01) | (length >> 1 & 0x01) | (length >> 2 & 0x01)))
+	if (0 == length || 1 < ((length & 0x01) + (length >> 1 & 0x01) + (length >> 2 & 0x01)))
 	{
 		printk("invalid argument: length is only 1,2,4,or 8\n");
 		return;
@@ -133,10 +131,8 @@ static void cmd_write(unsigned long addr, unsigned long value, int length)
 	{
 		old_value = ioread8(reg + addr_offset);
 		tmp_value[0] = ioread32(reg);
-		printk("old: %08x\n", tmp_value[0]);
 		p = (unsigned char *)tmp_value;
 		p[addr_offset] = value & 0xff;
-		printk("new: %08x\n", tmp_value[0]);
 		iowrite32(tmp_value[0], reg);
 		current_value = ioread8((reg + addr_offset));
 	}
