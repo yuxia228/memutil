@@ -5,12 +5,12 @@
  it under the terms of the GNU General Public License version 2 as
  published by the Free Software Foundation.
 ************************************************************************/
-#include <asm/io.h>	// for ioremap
+#include <asm/io.h>		   // for ioremap
 #include <asm/uaccess.h>   // for copy_to/from
-#include <linux/cdev.h>    // for char dev
+#include <linux/cdev.h>	// for char dev
 #include <linux/device.h>  // for makeing /dev
-#include <linux/fs.h>      // for char dev
-#include <linux/init.h>    // kernel-module
+#include <linux/fs.h>	  // for char dev
+#include <linux/init.h>	// kernel-module
 #include <linux/module.h>  // kernel-module
 #include <linux/types.h>   // for ssize_t
 #include <linux/uaccess.h> // for copy_to/from
@@ -27,9 +27,9 @@ MODULE_LICENSE("GPL");
 static int memdev_open(struct inode *inode, struct file *filp);
 static int memdev_release(struct inode *inode, struct file *filp);
 static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
-			   loff_t *offp);
+						   loff_t *offp);
 static ssize_t memdev_write(struct file *filp, const char __user *buff,
-			    size_t count, loff_t *offp);
+							size_t count, loff_t *offp);
 static void cmd_write(unsigned long addr, unsigned long value, int length);
 static void cmd_read(unsigned long addr, int length, int read_cycle);
 
@@ -45,7 +45,7 @@ static struct cdev memdev_cdev;
  * Char Device
  * ************************************************************/
 static struct class *memdev_class =
-    NULL; // デバイスドライバのクラスオブジェクト
+	NULL; // デバイスドライバのクラスオブジェクト
 enum MODE
 {
 	M_NONE,
@@ -70,7 +70,7 @@ static int cmdparse(char *k_buf)
 	PDEBUG("cmd:    %s\n", cmd);
 	PDEBUG("length: %d\n", length);
 	PDEBUG("addr:   %08lx\n", addr);
-	PDEBUG("value:  %08lx\n", value);
+	PDEBUG("value:  %lx\n", value);
 	switch (cmd[0])
 	{
 	case 'w':
@@ -104,14 +104,20 @@ static void cmd_write(unsigned long addr, unsigned long value, int length)
 {
 	// int loop;
 	int write_size = 0;
-	unsigned long old_value = 0, current_value = 0;
-	int loop = 0;
+	unsigned int old_value = 0, current_value = 0;
 	char *l_reg;
 	unsigned int var;
 	char *reg;
 
+	unsigned long addr_offset = 0; // for address alignment
+	unsigned int tmp_value[2];
+	unsigned char *p;
+	unsigned int loop;
+
+	addr_offset = addr % 4;
+
 	// request_mem_region(addr, length + 1, DEV_NAME);
-	reg = (char *)ioremap_nocache(addr, length);
+	reg = (char *)ioremap_nocache(addr - addr_offset, length + 4);
 	// if length not equal 1, 2, 4.
 	if (0 == length || 1 < ((length & 0x01) | (length >> 1 & 0x01) | (length >> 2 & 0x01)))
 	{
@@ -122,28 +128,38 @@ static void cmd_write(unsigned long addr, unsigned long value, int length)
 		write_size = length;
 
 	PDEBUG("Write [%08lx] %0*lx write_size:%d[byte]\n", addr, length / 2,
-	       value, write_size);
+		   value, write_size);
 	if (1 == write_size)
 	{
-		old_value = ioread8(reg);
-		iowrite8((unsigned char)(value & 0xff), reg);
-		current_value = ioread8((volatile void *)reg);
+		old_value = ioread8(reg + addr_offset);
+		tmp_value[0] = ioread32(reg);
+		printk("old: %08x\n", tmp_value[0]);
+		p = (unsigned char *)tmp_value;
+		p[addr_offset] = value & 0xff;
+		printk("new: %08x\n", tmp_value[0]);
+		iowrite32(tmp_value[0], reg);
+		current_value = ioread8((reg + addr_offset));
 	}
-	else if (2 == write_size)
+	else if (2 == write_size || 4 == write_size)
 	{
-		old_value = ioread16(reg);
-		iowrite16((unsigned short)(value & 0xffff), reg);
-		current_value = ioread16(reg);
+		p = (unsigned char *)&old_value;
+		for (loop = 0; loop < write_size; ++loop)
+			p[loop] = ioread8(reg + addr_offset + loop) & 0xff;
+		tmp_value[0] = ioread32(reg);
+		tmp_value[1] = ioread32(reg);
+		p = (unsigned char *)tmp_value;
+		for (loop = 0; loop < write_size; ++loop)
+			p[addr_offset + loop] = (value >> 8 * loop) & 0xff;
+		iowrite32(tmp_value[0], reg);
+		iowrite32(tmp_value[1], reg + 4);
+		p = (unsigned char *)&current_value;
+		for (loop = 0; loop < write_size; ++loop)
+			p[loop] = ioread8(reg + addr_offset + loop) & 0xff;
 	}
-	else if (4 == write_size)
-	{
-		old_value = ioread32(reg);
-		iowrite32((unsigned int)(value & 0xffffffff), reg);
-		current_value = ioread32(reg);
-	}
-	PDEBUG("[%08lx] %0*lx -> %0*lx\n", addr, length * 2, old_value,
-	       length * 2, current_value);
-	iounmap((void *)addr);
+
+	PDEBUG("[%08lx] %0*x -> %0*x\n", addr, length * 2, old_value,
+		   length * 2, current_value);
+	iounmap((void *)(addr - addr_offset));
 	// release_mem_region(addr, length + 1);
 }
 
@@ -174,7 +190,7 @@ static void cmd_read(unsigned long addr, int length, int _read_cycle)
 		{
 			l_addr = addr + read_cycle * (loop / read_cycle);
 			sprintf(str, "[0x%08lx] 0x%0*lx\n", l_addr,
-				read_cycle * 2, val);
+					read_cycle * 2, val);
 			PDEBUG("%s", str);
 			strcat(g_buf, str);
 			val = 0;
@@ -197,7 +213,7 @@ static int memdev_release(struct inode *inode, struct file *filp)
 }
 
 static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
-			   loff_t *offp)
+						   loff_t *offp)
 {
 	int ret;
 	int i;
@@ -224,7 +240,7 @@ static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
 }
 
 static ssize_t memdev_write(struct file *filp, const char __user *buff,
-			    size_t count, loff_t *offp)
+							size_t count, loff_t *offp)
 {
 	static int ret;
 	static char k_buf[1024];
@@ -242,11 +258,11 @@ static ssize_t memdev_write(struct file *filp, const char __user *buff,
 }
 
 struct file_operations memdev_fops = {
-    .owner = THIS_MODULE,
-    .read = memdev_read,
-    .write = memdev_write,
-    .open = memdev_open,
-    .release = memdev_release,
+	.owner = THIS_MODULE,
+	.read = memdev_read,
+	.write = memdev_write,
+	.open = memdev_open,
+	.release = memdev_release,
 };
 
 /***************************************************************
@@ -254,8 +270,8 @@ struct file_operations memdev_fops = {
  * ************************************************************/
 static int memutil_init(void)
 {
-	int ret = 0;			   // For error handling
-	dev_t dev = MKDEV(0, 0);	   // dev_t構造体の作成
+	int ret = 0;					   // For error handling
+	dev_t dev = MKDEV(0, 0);		   // dev_t構造体の作成
 	static unsigned int dev_count = 1; // デバイス番号の数
 	printk("init memutil\n");
 	PDEBUG("Debug is ON\n");
@@ -291,7 +307,7 @@ static int memutil_init(void)
 		return -1;
 	}
 	device_create(memdev_class, NULL, MKDEV(major_num, minor_num), NULL,
-		      "%s", DEV_NAME);
+				  "%s", DEV_NAME);
 
 	return 0;
 }
