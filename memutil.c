@@ -14,6 +14,7 @@
 #include <linux/module.h>  // kernel-module
 #include <linux/types.h>   // for ssize_t
 #include <linux/uaccess.h> // for copy_to/from
+#include <linux/delay.h>   // msleep function
 MODULE_LICENSE("GPL");
 
 /***************************************************************
@@ -32,11 +33,14 @@ static ssize_t memdev_write(struct file *filp, const char __user *buff,
 							size_t count, loff_t *offp);
 static void cmd_write(unsigned long addr, unsigned long value, int length);
 static void cmd_read(unsigned long addr, int length, int read_cycle);
+static void cmd_monitor(unsigned long addr, int length, int read_cycle);
+static int monitor_proc(void);
 
 /***************************************************************
  * Variables
  * ************************************************************/
 #define DEV_NAME "memd"
+#define BUFF_SIZE 1024
 static unsigned int major_num = 0;
 static unsigned int minor_num = 0;
 static struct cdev memdev_cdev;
@@ -56,7 +60,9 @@ enum MODE
 
 static unsigned long g_addr;
 static int g_mode = M_NONE;
-static char g_buf[1024];
+static char g_buf[BUFF_SIZE];
+static unsigned int g_readLength;
+static unsigned int g_readCycle;
 
 static int cmdparse(char *k_buf)
 {
@@ -91,6 +97,10 @@ static int cmdparse(char *k_buf)
 		break;
 	case 'm':
 		l_mode = M_MONITOR;
+		if (ret == 3)
+			cmd_monitor(addr, length, 4);
+		else if (ret == 4)
+			cmd_monitor(addr, length, value);
 		break;
 	default:
 		l_mode = M_NONE;
@@ -98,6 +108,77 @@ static int cmdparse(char *k_buf)
 		break;
 	}
 	return l_mode;
+}
+
+static void cmd_monitor(unsigned long addr, int value, int read_cycle)
+{
+	g_addr = addr;
+	g_readLength = value;
+	g_readCycle = read_cycle;
+}
+
+static int monitor_proc()
+{
+	char *reg;
+	unsigned long addr_offset = 0; // for address alignment
+	int loop;
+	unsigned long val = 0;
+	unsigned char l_buf[BUFF_SIZE];
+	unsigned int l_length = 0;
+	PDEBUG("%x %d %d\n", g_addr, g_readLength, g_readCycle);
+
+	for (loop = 0; loop < BUFF_SIZE; ++loop)
+		l_buf[loop] = '\0';
+
+	addr_offset = g_addr % 4;
+	if (addr_offset)
+		l_length = g_readLength + 4;
+	else
+		l_length = g_readLength;
+	reg = (char *)ioremap_nocache(g_addr - addr_offset, l_length);
+
+	sprintf(l_buf, "[Address] value\n[%08x] ", g_addr);
+	for (loop = 0; loop < l_length; loop++)
+	{
+		char str[100];
+		val |= (unsigned long)ioread8(reg++) << 8 * (loop % g_readCycle);
+		if ((loop % g_readCycle) == (g_readCycle - 1))
+		{
+			sprintf(str, "0x%0*lx ", g_readCycle * 2, val);
+			strcat(l_buf, str);
+			val = 0;
+		}
+		if (15 == (loop % 16))
+		{
+			sprintf(str, "\n[%08x] ", g_addr + loop + 1);
+			strcat(l_buf, str);
+		}
+	}
+	strcat(l_buf, "\n");
+
+	iounmap((void *)(g_addr - addr_offset));
+
+	for (loop = 0; loop < BUFF_SIZE; ++loop)
+	{
+		if (g_buf[loop] != l_buf[loop])
+		{
+			memcpy(g_buf, l_buf, BUFF_SIZE);
+			return 1;
+		}
+		if (l_buf[loop] == '\0')
+			break;
+	}
+	return 0;
+
+	// if (2 != strcmp(g_buf, l_buf)) // not equal
+	// {
+	// 	// for (loop = 0; loop < BUFF_SIZE; ++loop)
+	// 	// 	g_buf[loop] = l_buf[loop];
+	// 	memcpy(g_buf, l_buf, BUFF_SIZE);
+	// 	printk("detect\n");
+	// 	return 1;
+	// }
+	// return 0;
 }
 
 static void cmd_write(unsigned long addr, unsigned long value, int length)
@@ -213,6 +294,9 @@ static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
 {
 	int ret;
 	int i;
+	unsigned char dummy[BUFF_SIZE];
+	for (i = 0; i < BUFF_SIZE; ++i)
+		dummy[i] = '\0';
 	PDEBUG("%s_read  : count: %d\n", DEV_NAME, (int)count);
 	switch (g_mode)
 	{
@@ -223,14 +307,25 @@ static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
 		ret = copy_to_user(buff, g_buf, sizeof(g_buf));
 		if (ret != 0)
 			return -EFAULT;
-		for (i = 0; i < 1024; ++i)
+		for (i = 0; i < BUFF_SIZE; ++i)
 			g_buf[i] = '\0';
 		g_mode = M_NONE;
 		return sizeof(g_buf);
 	case M_WRITE:
 		return 0;
 	case M_MONITOR:
-		return 0;
+		PDEBUG("M_MONITOR\n");
+		ret = monitor_proc();
+		if (ret == 1)
+			ret = copy_to_user(buff, g_buf, sizeof(g_buf));
+		else
+			ret = copy_to_user(buff, dummy, sizeof(dummy));
+		if (ret != 0)
+			printk("EFAULT\n");
+		if (ret != 0)
+			return -EFAULT;
+		msleep(1);
+		return BUFF_SIZE;
 	}
 	return 0;
 }
