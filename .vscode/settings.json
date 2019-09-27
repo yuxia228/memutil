@@ -1,0 +1,63 @@
+{
+    "editor.fontFamily": "Ricty Diminished",
+    "editor.fontSize": 14,
+    // エディターで空白文字を表示するかどうかを制御します
+    "editor.renderWhitespace": true,
+    // 垂直ルーラーを表示する列
+    "editor.rulers": [
+        80
+    ],
+    // "editor.wordWrap": "bounded",
+    // "editor.wordWrapColumn": 75,
+    // "C_Cpp.default.intelliSenseMode": "gcc-x64",
+    // // 有効にすると、ファイルの保存時に末尾の空白をトリミングします。
+    // "files.trimTrailingWhitespace": true,
+    // エクスプローラーから除外するファイルとフォルダ
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/bin": true,
+        "**/*.exe": true,
+        "**/*.o": true,
+        "**/*.obj": true,
+        "**/*.ilk": true,
+        "**/*.pdb": true,
+        "**/*.tlog": true,
+        "**/*.idb": true,
+        "**/*.dll": true,
+        "**.vs": true
+    },
+    // ファイルの終端に空の行を追加する
+    // "files.insertFinalNewline": true,
+    // 統合ターミナルのカーソルを点滅させる
+    "terminal.integrated.cursorBlinking": true,
+    /////////////////////////////////////////////////////////////////////////
+    // 以下は、C/C++拡張機能固有の設定値
+    // 殆どがclang-fomatに関する設定で、ほぼデフォルトのまま何も設定しなくても良い
+    /////////////////////////////////////////////////////////////////////////
+    // clang-formatの実行ファイルへのフルパス
+    // 拡張機能のインストール時にダウンロードされるので設定する必要は無い
+    "C_Cpp.clang_format_path": null,
+    // clang-formatでコード整形する時のスタイルを設定する
+    // デフォルトはワークスペースルートとその親フォルダに`.clang-format`ファイルがある場合はその設定値を使用し、
+    // .clang-formatファイルが無い場合はC_Cpp.clang_format_fallbackStyleで代わりの設定を実行される
+    "C_Cpp.clang_format_style": "file",
+    // C_Cpp.clang_format_styleが実行できなかった時に代わりに実行される書式設定を指定する
+    // "C_Cpp.clang_format_fallbackStyle": "Visual Studio",
+    "C_Cpp.clang_format_fallbackStyle": "Google",
+    // includeをソートするかを設定
+    // この設定値は.clang-formatファイルのSortIncludesプロパティを上書きする
+    "C_Cpp.clang_format_sortIncludes": null,
+    // ファイルの保存時に自動整形を有効にする
+    "C_Cpp.clang_format_formatOnSave": false,
+    // `Default`はコードフォーマットを有効にし、`Disabled`は無効にする。
+    "C_Cpp.formatting": "Default",
+    "[c]": {
+        "editor.detectIndentation": false,
+        "editor.tabSize": 8,
+        "editor.insertSpaces": false
+    }
+}

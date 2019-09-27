@@ -1,4 +1,4 @@
-BraceWrapping:
+---
 BasedOnStyle: LLVM
 Language: Cpp
 IndentWidth: 8

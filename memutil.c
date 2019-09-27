@@ -3,12 +3,12 @@
     2019/09/17  yuxia228      development start
  licensed under GNU General Public License 3.0 or later.
 ************************************************************************/
-#include <asm/io.h>		   // for ioremap
+#include <asm/io.h>	// for ioremap
 #include <asm/uaccess.h>   // for copy_to/from
-#include <linux/cdev.h>	// for char dev
-#include <linux/device.h>  // for makeing /dev
-#include <linux/fs.h>	  // for char dev
-#include <linux/init.h>	// kernel-module
+#include <linux/cdev.h>    // for char dev
+#include <linux/device.h>  // for making /dev
+#include <linux/fs.h>      // for char dev
+#include <linux/init.h>    // kernel-module
 #include <linux/module.h>  // kernel-module
 #include <linux/types.h>   // for ssize_t
 #include <linux/uaccess.h> // for copy_to/from
@@ -26,9 +26,9 @@ MODULE_LICENSE("GPL");
 static int memdev_open(struct inode *inode, struct file *filp);
 static int memdev_release(struct inode *inode, struct file *filp);
 static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
-						   loff_t *offp);
+			   loff_t *offp);
 static ssize_t memdev_write(struct file *filp, const char __user *buff,
-							size_t count, loff_t *offp);
+			    size_t count, loff_t *offp);
 static void cmd_write(unsigned long addr, unsigned long value, int length);
 static void cmd_read(unsigned long addr, int length, int read_cycle);
 static void cmd_monitor(unsigned long addr, int length, int read_cycle);
@@ -48,8 +48,7 @@ static struct cdev memdev_cdev;
  * ************************************************************/
 static struct class *memdev_class =
 	NULL; // デバイスドライバのクラスオブジェクト
-enum MODE
-{
+enum MODE {
 	M_NONE,
 	M_READ,
 	M_WRITE,
@@ -75,8 +74,7 @@ static int cmdparse(char *k_buf)
 	PDEBUG("length: %d\n", length);
 	PDEBUG("addr:   %08lx\n", addr);
 	PDEBUG("value:  %lx\n", value);
-	switch (cmd[0])
-	{
+	switch (cmd[0]) {
 	case 'w':
 		l_mode = M_WRITE;
 		if (ret == 4)
@@ -136,18 +134,16 @@ static int monitor_proc()
 	reg = (char *)ioremap_nocache(g_addr - addr_offset, l_length);
 
 	sprintf(l_buf, "[Address] value\n[%08x] ", g_addr);
-	for (loop = 0; loop < l_length; loop++)
-	{
+	for (loop = 0; loop < l_length; loop++) {
 		char str[100];
-		val |= (unsigned long)ioread8(reg++) << 8 * (loop % g_readCycle);
-		if ((loop % g_readCycle) == (g_readCycle - 1))
-		{
+		val |= (unsigned long)ioread8(reg++)
+		       << 8 * (loop % g_readCycle);
+		if ((loop % g_readCycle) == (g_readCycle - 1)) {
 			sprintf(str, "0x%0*lx ", g_readCycle * 2, val);
 			strcat(l_buf, str);
 			val = 0;
 		}
-		if (15 == (loop % 16))
-		{
+		if (15 == (loop % 16)) {
 			sprintf(str, "\n[%08x] ", g_addr + loop + 1);
 			strcat(l_buf, str);
 		}
@@ -156,10 +152,8 @@ static int monitor_proc()
 
 	iounmap((void *)(g_addr - addr_offset));
 
-	for (loop = 0; loop < BUFF_SIZE; ++loop)
-	{
-		if (g_buf[loop] != l_buf[loop])
-		{
+	for (loop = 0; loop < BUFF_SIZE; ++loop) {
+		if (g_buf[loop] != l_buf[loop]) {
 			memcpy(g_buf, l_buf, BUFF_SIZE);
 			return 1;
 		}
@@ -196,27 +190,24 @@ static void cmd_write(unsigned long addr, unsigned long value, int length)
 	// request_mem_region(addr, length + 1, DEV_NAME);
 	reg = (char *)ioremap_nocache(addr - addr_offset, length + 4);
 	// if length not equal 1, 2, 4.
-	if (0 == length || 1 < ((length & 0x01) + (length >> 1 & 0x01) + (length >> 2 & 0x01)))
-	{
+	if (0 == length
+	    || 1 < ((length & 0x01) + (length >> 1 & 0x01)
+		    + (length >> 2 & 0x01))) {
 		printk("invalid argument: length is only 1,2,4,or 8\n");
 		return;
-	}
-	else
+	} else
 		write_size = length;
 
 	PDEBUG("Write [%08lx] %0*lx write_size:%d[byte]\n", addr, length / 2,
-		   value, write_size);
-	if (1 == write_size)
-	{
+	       value, write_size);
+	if (1 == write_size) {
 		old_value = ioread8(reg + addr_offset);
 		tmp_value[0] = ioread32(reg);
 		p = (unsigned char *)tmp_value;
 		p[addr_offset] = value & 0xff;
 		iowrite32(tmp_value[0], reg);
 		current_value = ioread8((reg + addr_offset));
-	}
-	else if (2 == write_size || 4 == write_size)
-	{
+	} else if (2 == write_size || 4 == write_size) {
 		p = (unsigned char *)&old_value;
 		for (loop = 0; loop < write_size; ++loop)
 			p[loop] = ioread8(reg + addr_offset + loop) & 0xff;
@@ -233,7 +224,7 @@ static void cmd_write(unsigned long addr, unsigned long value, int length)
 	}
 
 	PDEBUG("[%08lx] %0*x -> %0*x\n", addr, length * 2, old_value,
-		   length * 2, current_value);
+	       length * 2, current_value);
 	iounmap((void *)(addr - addr_offset));
 	// release_mem_region(addr, length + 1);
 }
@@ -247,25 +238,28 @@ static void cmd_read(unsigned long addr, int length, int _read_cycle)
 	char *reg;
 	g_addr = addr;
 	// if _read_cycle not equal 1, 2, 4.
-	if (0 == _read_cycle || 1 < ((_read_cycle >> 0 & 0x01) + (_read_cycle >> 1 & 0x01) + (_read_cycle >> 2 & 0x01)))
-		read_cycle = 4;
-	else
+	switch (_read_cycle) {
+	case 1:
+	case 2:
+	case 4:
 		read_cycle = _read_cycle;
-
+		break;
+	default:
+		read_cycle = 4;
+		break;
+	}
 	if (0 != length % read_cycle)
 		length += read_cycle - (length % read_cycle);
 	// request_mem_region(addr, length + 1, DEV_NAME);
 	reg = (char *)ioremap_nocache(addr, length);
 	PDEBUG("Read [%08lx] %d byte\n", addr, length);
-	for (loop = 0; loop < length; loop++)
-	{
+	for (loop = 0; loop < length; loop++) {
 		char str[100];
 		val |= (unsigned long)ioread8(reg++) << 8 * (loop % read_cycle);
-		if ((loop % read_cycle) == (read_cycle - 1))
-		{
+		if ((loop % read_cycle) == (read_cycle - 1)) {
 			l_addr = addr + read_cycle * (loop / read_cycle);
 			sprintf(str, "[0x%08lx] 0x%0*lx\n", l_addr,
-					read_cycle * 2, val);
+				read_cycle * 2, val);
 			PDEBUG("%s", str);
 			strcat(g_buf, str);
 			val = 0;
@@ -288,7 +282,7 @@ static int memdev_release(struct inode *inode, struct file *filp)
 }
 
 static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
-						   loff_t *offp)
+			   loff_t *offp)
 {
 	int ret;
 	int i;
@@ -296,8 +290,7 @@ static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
 	for (i = 0; i < BUFF_SIZE; ++i)
 		dummy[i] = '\0';
 	PDEBUG("%s_read  : count: %d\n", DEV_NAME, (int)count);
-	switch (g_mode)
-	{
+	switch (g_mode) {
 	case M_NONE:
 		return 0;
 	case M_READ:
@@ -329,15 +322,14 @@ static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
 }
 
 static ssize_t memdev_write(struct file *filp, const char __user *buff,
-							size_t count, loff_t *offp)
+			    size_t count, loff_t *offp)
 {
 	static int ret;
 	static char k_buf[1024];
 
 	PDEBUG("%s_write : count: %d\n", DEV_NAME, (int)count);
 	ret = copy_from_user(k_buf, buff, count);
-	if (ret > 0)
-	{
+	if (ret > 0) {
 		PDEBUG("Data is Remain: %d\n", ret);
 	}
 	PDEBUG("Recv: %s\n", k_buf);
@@ -355,20 +347,19 @@ struct file_operations memdev_fops = {
 };
 
 /***************************************************************
- * Driver Initilize / Close
+ * Driver Initialize / Close
  * ************************************************************/
 static int memutil_init(void)
 {
-	int ret = 0;					   // For error handling
-	dev_t dev = MKDEV(0, 0);		   // dev_t構造体の作成
+	int ret = 0;			   // For error handling
+	dev_t dev = MKDEV(0, 0);	   // dev_t構造体の作成
 	static unsigned int dev_count = 1; // デバイス番号の数
 	printk("init memutil\n");
 	PDEBUG("Debug is ON\n");
 
 	// デバイス番号の動的な割り当て
 	ret = alloc_chrdev_region(&dev, 0, 1, DEV_NAME);
-	if (ret != 0)
-	{
+	if (ret != 0) {
 		printk("  Error Init\n");
 		return -1;
 	}
@@ -379,8 +370,7 @@ static int memutil_init(void)
 	cdev_init(&memdev_cdev, &memdev_fops);
 	memdev_cdev.owner = THIS_MODULE;
 	ret = cdev_add(&memdev_cdev, MKDEV(major_num, minor_num), dev_count);
-	if (ret != 0)
-	{
+	if (ret != 0) {
 		printk(KERN_ALERT "error cdev_add\n");
 		unregister_chrdev_region(dev, dev_count);
 		return -1;
@@ -388,15 +378,14 @@ static int memutil_init(void)
 
 	// このデバイスのclassの登録
 	memdev_class = class_create(THIS_MODULE, DEV_NAME);
-	if (IS_ERR(memdev_class))
-	{
+	if (IS_ERR(memdev_class)) {
 		printk(KERN_ERR "class_create\n");
 		cdev_del(&memdev_cdev);
 		unregister_chrdev_region(dev, dev_count);
 		return -1;
 	}
 	device_create(memdev_class, NULL, MKDEV(major_num, minor_num), NULL,
-				  "%s", DEV_NAME);
+		      "%s", DEV_NAME);
 
 	return 0;
 }

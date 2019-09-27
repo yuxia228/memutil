@@ -10,7 +10,6 @@
 #ifdef MEMUTIL_DEBUG
 #ifdef __KERNEL__
 // in kernel space
-// #define PDEBUG(fmt, args...) printk(KERN_DEBUG DRV_NAME ": " fmt, ##args)
 #define PDEBUG(fmt, args...) printk(KERN_INFO DRV_NAME ": " fmt, ##args)
 #else
 #define PDEBUG(fmt, args...) printf(stderr, DRV_NAME ": " fmt, ##args)
