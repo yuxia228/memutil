@@ -2,7 +2,7 @@
     "editor.fontFamily": "Ricty Diminished",
     "editor.fontSize": 14,
     // エディターで空白文字を表示するかどうかを制御します
-    "editor.renderWhitespace": true,
+    "editor.renderWhitespace": "boundary",
     // 垂直ルーラーを表示する列
     "editor.rulers": [
         80
