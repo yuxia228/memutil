@@ -32,7 +32,7 @@ echo "read|r length addr [read_cycle]" > /dev/memd
 - read_cycle(option): read cycle[byte] (default is 4)
   - list: [ 1, 2, 4];
 
-### example
+#### example
 
 ```bash
 echo "read 8 0x12345678 4" > /dev/memd
@@ -54,13 +54,70 @@ echo "write|r length addr value" > /dev/memd
 - addr: write top address(hex)
 - value: write data(hex)
 
-### example
+#### example
 
 ```bash
 # [0x12345678] 0x7856eeee
 echo "write 4 0x12345678 0xAAAAAAAA" > /dev/memd
 # [0x12345678] 0xAAAAAAAA
 ```
+
+### Monitor
+
+```bash
+echo "monitor|m length addr read_cycle" > /dev/memd
+cat /dev/memd
+```
+
+- length: read size[byte]
+  - Max: 1024
+- addr: read top address(hex)
+- read_cycle(option): read cycle[byte] (default is 4)
+  - list: [ 1, 2, 4];
+
+#### example
+
+```bash
+echo "monitor|m length addr value" > /dev/memd
+cat /dev/memd
+# when value is changed, value is shown
+```
+
+### Polling
+
+```bash
+echo "polling|p length addr read_cycle interval" > /dev/memd
+cat /dev/memd
+```
+
+- length: read size[byte]
+  - Max: 1024
+- addr: read top address(hex)
+- read_cycle(option): read cycle[byte] (default is 4)
+  - list: [ 1, 2, 4];
+- interval: interval time[msec]
+
+#### example
+
+```bash
+echo "polling 32 0x12345678 1 1000" > /dev/memd
+cat /dev/memd
+#                0    1    2    3    4    5    6    7    8    9    a    b    c    d    e    f
+#[0x12345678] 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 
+#[0x12345688] 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+.
+.
+.
+```
+
+### wrapper script
+
+- memutil.sh
+
+#### Usage 
+
+- See ```./memutil.sh -h```
+
 
 ### bug?
 
