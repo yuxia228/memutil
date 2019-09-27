@@ -32,7 +32,10 @@ static ssize_t memdev_write(struct file *filp, const char __user *buff,
 static void cmd_write(unsigned long addr, unsigned long value, int length);
 static void cmd_read(unsigned long addr, int length, int read_cycle);
 static void cmd_monitor(unsigned long addr, int length, int read_cycle);
+static void cmd_polling(unsigned long addr, int length, int interval,
+			int read_cycle);
 static int monitor_proc(void);
+static void polling_proc(void);
 
 /***************************************************************
  * Variables
@@ -53,6 +56,7 @@ enum MODE {
 	M_READ,
 	M_WRITE,
 	M_MONITOR,
+	M_POLLING,
 };
 
 static unsigned long g_addr;
@@ -60,20 +64,23 @@ static int g_mode = M_NONE;
 static char g_buf[BUFF_SIZE];
 static unsigned int g_readLength;
 static unsigned int g_readCycle;
+static unsigned int g_msleepCount = 1000;
 
 static int cmdparse(char *k_buf)
 {
 	char cmd[32];
-	unsigned long addr, value;
+	unsigned long addr, value = 0, option = 0;
 	int length, ret;
 	int l_mode = M_NONE;
-	ret = sscanf(k_buf, "%31s %d %lx %lx", cmd, &length, &addr, &value);
+	ret = sscanf(k_buf, "%31s %d %lx %lx %lx", cmd, &length, &addr, &value,
+		     &option);
 	cmd[31] = '\0';
 	PDEBUG("ret:    %d\n", ret);
 	PDEBUG("cmd:    %s\n", cmd);
 	PDEBUG("length: %d\n", length);
 	PDEBUG("addr:   %08lx\n", addr);
 	PDEBUG("value:  %lx\n", value);
+	PDEBUG("option: %lx\n", option);
 	switch (cmd[0]) {
 	case 'w':
 		l_mode = M_WRITE;
@@ -97,6 +104,15 @@ static int cmdparse(char *k_buf)
 			cmd_monitor(addr, length, 4);
 		else if (ret == 4)
 			cmd_monitor(addr, length, value);
+		break;
+	case 'p':
+		l_mode = M_POLLING;
+		if (ret == 3)
+			cmd_polling(addr, length, 1000, 4); // 1000ms wait
+		else if (ret == 4)
+			cmd_polling(addr, length, 1000, value); // 1000ms wait
+		else if (ret == 5)
+			cmd_polling(addr, length, option, value);
 		break;
 	default:
 		l_mode = M_NONE;
@@ -171,6 +187,78 @@ static int monitor_proc()
 	// 	return 1;
 	// }
 	// return 0;
+}
+static void cmd_polling(unsigned long addr, int value, int interval,
+			int read_cycle)
+{
+	g_addr = addr;
+	g_readLength = value;
+	g_msleepCount = interval;
+	g_readCycle = read_cycle;
+}
+
+static void polling_proc()
+{
+	char *reg;
+	unsigned long addr_offset = 0; // for address alignment
+	int loop;
+	unsigned long val = 0;
+	unsigned char l_buf[BUFF_SIZE];
+	unsigned int l_length = 0;
+	switch (g_readCycle) {
+	case 1:
+	case 2:
+	case 4:
+	case 8:
+	case 16:
+		break;
+	default:
+		g_readCycle = 4;
+		break;
+	}
+	for (loop = 0; loop < BUFF_SIZE; ++loop)
+		l_buf[loop] = '\0';
+
+	addr_offset = g_addr % 4;
+	if (addr_offset)
+		l_length = g_readLength + 4;
+	else
+		l_length = g_readLength;
+	reg = (char *)ioremap_nocache(g_addr - addr_offset, l_length);
+	//
+	sprintf(l_buf, "            ");
+	for (loop = 0; loop < 16 / g_readCycle; ++loop) {
+		char tmp[100];
+		sprintf(tmp, " %*x", g_readCycle * 2 + 2, loop * g_readCycle);
+		strcat(l_buf, tmp);
+	}
+	{
+		char tmp[100];
+		sprintf(tmp, "\n[0x%08lx] ", g_addr);
+		strcat(l_buf, tmp);
+	}
+
+	for (loop = 0; loop < l_length; loop++) {
+		char str[100];
+		val |= (unsigned long)ioread8(reg++)
+		       << 8 * (loop % g_readCycle);
+		if ((loop % g_readCycle) == (g_readCycle - 1)) {
+			sprintf(str, "0x%0*lx ", g_readCycle * 2, val);
+			strcat(l_buf, str);
+			val = 0;
+		}
+		if (loop == (l_length - 1))
+			break;
+
+		if (15 == (loop % 16)) {
+			sprintf(str, "\n[0x%08lx] ", g_addr + loop + 1);
+			strcat(l_buf, str);
+		}
+	}
+	strcat(l_buf, "\n");
+
+	iounmap((void *)(g_addr - addr_offset));
+	memcpy(g_buf, l_buf, BUFF_SIZE);
 }
 
 static void cmd_write(unsigned long addr, unsigned long value, int length)
@@ -317,7 +405,16 @@ static ssize_t memdev_read(struct file *filp, char __user *buff, size_t count,
 			return -EFAULT;
 		msleep(1);
 		return BUFF_SIZE;
+	case M_POLLING:
+		PDEBUG("M_POLLING\n");
+		polling_proc();
+		ret = copy_to_user(buff, g_buf, sizeof(g_buf));
+		if (ret != 0)
+			return -EFAULT;
+		msleep(g_msleepCount);
+		return BUFF_SIZE;
 	}
+
 	return 0;
 }
 
