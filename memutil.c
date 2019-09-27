@@ -149,7 +149,18 @@ static int monitor_proc()
 		l_length = g_readLength;
 	reg = (char *)ioremap_nocache(g_addr - addr_offset, l_length);
 
-	sprintf(l_buf, "[Address] value\n[%08x] ", g_addr);
+	sprintf(l_buf, "            ");
+	for (loop = 0; loop < 16 / g_readCycle; ++loop) {
+		char tmp[100];
+		sprintf(tmp, " %*x", g_readCycle * 2 + 2, loop * g_readCycle);
+		strcat(l_buf, tmp);
+	}
+	{
+		char tmp[100];
+		sprintf(tmp, "\n[0x%08lx] ", g_addr);
+		strcat(l_buf, tmp);
+	}
+
 	for (loop = 0; loop < l_length; loop++) {
 		char str[100];
 		val |= (unsigned long)ioread8(reg++)
@@ -159,8 +170,12 @@ static int monitor_proc()
 			strcat(l_buf, str);
 			val = 0;
 		}
+
+		if (loop == (l_length - 1))
+			break;
+
 		if (15 == (loop % 16)) {
-			sprintf(str, "\n[%08x] ", g_addr + loop + 1);
+			sprintf(str, "\n[0x%08lx] ", g_addr + loop + 1);
 			strcat(l_buf, str);
 		}
 	}
@@ -177,17 +192,8 @@ static int monitor_proc()
 			break;
 	}
 	return 0;
-
-	// if (2 != strcmp(g_buf, l_buf)) // not equal
-	// {
-	// 	// for (loop = 0; loop < BUFF_SIZE; ++loop)
-	// 	// 	g_buf[loop] = l_buf[loop];
-	// 	memcpy(g_buf, l_buf, BUFF_SIZE);
-	// 	printk("detect\n");
-	// 	return 1;
-	// }
-	// return 0;
 }
+
 static void cmd_polling(unsigned long addr, int value, int interval,
 			int read_cycle)
 {
