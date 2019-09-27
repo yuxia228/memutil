@@ -1,9 +1,7 @@
 /************************************************************************
-  memutil.c
+  memutil.c : driver for read/write memory.
     2019/09/17  yuxia228      development start
- This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License version 2 as
- published by the Free Software Foundation.
+ licensed under GNU General Public License 3.0 or later.
 ************************************************************************/
 #include <asm/io.h>		   // for ioremap
 #include <asm/uaccess.h>   // for copy_to/from
